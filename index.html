@@ -1,0 +1,818 @@
+<!DOCTYPE html>
+<html lang="en-AU">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OBD Engine Analyser</title>
+<style>
+  :root{
+    --bg:#0f1216; --card:#171b21; --line:#262c35; --text:#e7ebf0; --muted:#8b95a3;
+    --ok:#3fb27f; --warn:#e5a83b; --bad:#e5534b; --info:#5b9bd5; --accent:#5b9bd5;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);font:15px/1.45 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+  header{display:flex;align-items:center;justify-content:space-between;padding:14px 16px;border-bottom:1px solid var(--line);position:sticky;top:0;background:var(--bg);z-index:5}
+  header h1{font-size:17px;margin:0;font-weight:650;letter-spacing:.2px}
+  .pill{font-size:12px;padding:4px 10px;border-radius:999px;background:var(--line);color:var(--muted)}
+  .pill.on{background:rgba(63,178,127,.15);color:var(--ok)}
+  main{max-width:1100px;margin:0 auto;padding:14px;display:grid;gap:14px;grid-template-columns:minmax(0,1fr)}
+  @media(min-width:900px){main{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}.span2{grid-column:span 2}}
+  select{max-width:100%}
+  .card{min-width:0;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px}
+  .card h2{font-size:13px;text-transform:uppercase;letter-spacing:.8px;color:var(--muted);margin:0 0 10px;font-weight:600}
+  .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+  label{font-size:13px;color:var(--muted)}
+  select,input,button{font:inherit;color:var(--text);background:#0f1216;border:1px solid var(--line);border-radius:8px;padding:8px 10px}
+  input[type=number]{width:80px}
+  button{cursor:pointer;background:#20262f}
+  button.primary{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600}
+  button.danger{border-color:var(--bad);color:var(--bad)}
+  button:disabled{opacity:.45;cursor:not-allowed}
+  .mil{display:flex;align-items:center;gap:14px}
+  .mil .lamp{width:54px;height:54px;border-radius:50%;display:grid;place-items:center;font-size:26px;background:#20262f;color:var(--muted);flex:none}
+  .mil .lamp.on{background:rgba(229,168,59,.18);color:var(--warn);box-shadow:0 0 18px rgba(229,168,59,.35)}
+  .mil .big{font-size:20px;font-weight:650}
+  .muted{color:var(--muted);font-size:13px}
+  .gauges{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px}
+  .g{background:#12161b;border:1px solid var(--line);border-radius:10px;padding:10px}
+  .g .n{font-size:12px;color:var(--muted)}
+  .g .v{font-size:24px;font-weight:650;font-variant-numeric:tabular-nums}
+  .g .u{font-size:12px;color:var(--muted);margin-left:3px}
+  .g.ok{border-left:3px solid var(--ok)} .g.warn{border-left:3px solid var(--warn)} .g.bad{border-left:3px solid var(--bad)}
+  .finding{border:1px solid var(--line);border-left-width:4px;border-radius:10px;padding:10px 12px;margin-bottom:8px;background:#12161b}
+  .finding.bad{border-left-color:var(--bad)} .finding.warn{border-left-color:var(--warn)} .finding.info{border-left-color:var(--info)} .finding.ok{border-left-color:var(--ok)}
+  .finding .t{font-weight:650}
+  .finding .d{font-size:14px;color:#c5ccd6;margin-top:4px}
+  .tag{display:inline-block;font-size:11px;padding:1px 7px;border-radius:6px;margin-right:6px;vertical-align:1px;font-weight:600}
+  .tag.bad{background:rgba(229,83,75,.18);color:var(--bad)} .tag.warn{background:rgba(229,168,59,.18);color:var(--warn)}
+  .tag.info{background:rgba(91,155,213,.18);color:var(--info)} .tag.ok{background:rgba(63,178,127,.18);color:var(--ok)}
+  table{width:100%;border-collapse:collapse;font-size:14px}
+  td,th{padding:6px 4px;border-bottom:1px solid var(--line);text-align:left}
+  th{color:var(--muted);font-weight:500;font-size:12px}
+  td.num{text-align:right;font-variant-numeric:tabular-nums}
+  canvas{width:100%;height:170px;display:block;background:#12161b;border:1px solid var(--line);border-radius:10px}
+  .legend{display:flex;gap:12px;flex-wrap:wrap;font-size:12px;color:var(--muted);margin:6px 2px 10px}
+  .legend i{display:inline-block;width:10px;height:3px;border-radius:2px;margin-right:5px;vertical-align:middle}
+  details summary{cursor:pointer;color:var(--muted);font-size:13px}
+  pre#log{max-height:200px;overflow:auto;font-size:12px;background:#0b0e11;border:1px solid var(--line);border-radius:8px;padding:8px;white-space:pre-wrap}
+  .confirm{display:none;margin-top:10px;padding:10px;border:1px solid var(--bad);border-radius:10px;background:rgba(229,83,75,.08)}
+  .confirm.show{display:block}
+  .hint{font-size:13px;color:var(--muted);background:#12161b;border:1px dashed var(--line);border-radius:8px;padding:8px 10px;margin-bottom:10px}
+</style>
+</head>
+<body>
+<header>
+  <h1>OBD Engine Analyser</h1>
+  <span class="pill" id="connPill">Not connected</span>
+</header>
+
+<main>
+  <!-- CONNECTION -->
+  <section class="card span2">
+    <h2>Connect to ELM327</h2>
+    <div class="row">
+      <select id="method">
+        <option value="serial">USB or Bluetooth (COM port) – Chrome/Edge on PC</option>
+        <option value="ble">Bluetooth LE adapter – Chrome on Android/PC</option>
+        <option value="demo">Demo car (no adapter)</option>
+      </select>
+      <select id="baud" title="Baud rate (USB adapters)">
+        <option>38400</option><option>9600</option><option>115200</option><option>500000</option>
+      </select>
+      <label>Engine size <input type="number" id="disp" step="0.1" min="0.6" max="8" placeholder="L"> L</label>
+      <button class="primary" id="btnConnect">Connect</button>
+      <button id="btnDisconnect" disabled>Disconnect</button>
+    </div>
+    <p class="muted" id="connInfo" style="margin:8px 0 0">Plug the adapter in, turn the ignition on (engine running for live data), then Connect.</p>
+    <details style="margin-top:8px"><summary>Adapter log</summary><pre id="log"></pre></details>
+  </section>
+
+  <!-- MIL -->
+  <section class="card">
+    <h2>Check engine light</h2>
+    <div class="mil">
+      <div class="lamp" id="lamp">⚙</div>
+      <div>
+        <div class="big" id="milText">Unknown</div>
+        <div class="muted" id="milSub">Connect and read codes</div>
+      </div>
+    </div>
+    <div class="row" style="margin-top:12px">
+      <button class="primary" id="btnRead" disabled>Read codes &amp; freeze frame</button>
+      <button class="danger" id="btnClear" disabled>Clear codes…</button>
+    </div>
+    <div class="confirm" id="clearConfirm">
+      <div style="font-weight:650;margin-bottom:4px">Clear all engine codes?</div>
+      <div class="muted" style="margin-bottom:8px">This erases stored codes, freeze frame data and readiness monitors. Write the codes down first. If the fault is still there, the light will come back. Do this with the ignition on and the engine off.</div>
+      <div class="row"><button class="danger" id="btnClearYes">Yes, clear codes</button><button id="btnClearNo">Cancel</button></div>
+    </div>
+  </section>
+
+  <!-- DIAGNOSIS -->
+  <section class="card">
+    <h2>Why is the light on?</h2>
+    <div class="hint">For the most useful result: read codes, warm the engine fully, let it idle for 1 minute, then hold about 2,500 rpm for 30 seconds (in park/neutral).</div>
+    <div id="findings"><div class="muted">No data yet.</div></div>
+  </section>
+
+  <!-- LIVE -->
+  <section class="card span2">
+    <h2>Live data</h2>
+    <div class="gauges" id="gauges"></div>
+  </section>
+
+  <section class="card">
+    <h2>Fuel trims (total = short + long term)</h2>
+    <canvas id="chTrim" width="600" height="170"></canvas>
+    <div class="legend" id="lgTrim"></div>
+  </section>
+
+  <section class="card">
+    <h2>RPM and coolant</h2>
+    <canvas id="chRpm" width="600" height="170"></canvas>
+    <div class="legend" id="lgRpm"></div>
+  </section>
+
+  <!-- CODES -->
+  <section class="card">
+    <h2>Fault codes</h2>
+    <div id="codes"><div class="muted">Not read yet.</div></div>
+  </section>
+
+  <section class="card">
+    <h2>Freeze frame (conditions when the code set)</h2>
+    <div id="freeze"><div class="muted">Not read yet.</div></div>
+  </section>
+
+  <section class="card">
+    <h2>Readiness monitors</h2>
+    <div id="monitors"><div class="muted">Not read yet.</div></div>
+  </section>
+
+  <section class="card">
+    <h2>Data log</h2>
+    <p class="muted" style="margin-top:0">Every live sample is kept while connected. Export it to open in Excel.</p>
+    <div class="row">
+      <span id="logCount" class="muted">0 samples</span>
+      <button id="btnCsv" disabled>Export CSV</button>
+      <button id="btnReset">Reset session data</button>
+    </div>
+  </section>
+</main>
+
+<!-- ================= CORE (no DOM) ================= -->
+<script id="core">
+const OBD = (() => {
+  const u8 = s => { const out=[]; for(let i=0;i+1<s.length;i+=2) out.push(parseInt(s.substr(i,2),16)); return out; };
+  const pct = a => (a-128)*100/128;
+
+  const PIDS = {
+    '03': {key:'fuelStatus', name:'Fuel system', unit:'', f:d=>({1:'Open loop (cold)',2:'Closed loop',4:'Open loop (load/decel)',8:'Open loop (fault)',16:'Closed loop (fault)'}[d[0]]||('Code '+d[0]))},
+    '04': {key:'load', name:'Engine load', unit:'%', f:d=>d[0]*100/255},
+    '05': {key:'ect', name:'Coolant temp', unit:'°C', f:d=>d[0]-40},
+    '06': {key:'stft1', name:'Short trim B1', unit:'%', f:d=>pct(d[0])},
+    '07': {key:'ltft1', name:'Long trim B1', unit:'%', f:d=>pct(d[0])},
+    '08': {key:'stft2', name:'Short trim B2', unit:'%', f:d=>pct(d[0])},
+    '09': {key:'ltft2', name:'Long trim B2', unit:'%', f:d=>pct(d[0])},
+    '0B': {key:'map', name:'Manifold pressure', unit:'kPa', f:d=>d[0]},
+    '0C': {key:'rpm', name:'RPM', unit:'rpm', f:d=>(256*d[0]+d[1])/4},
+    '0D': {key:'speed', name:'Speed', unit:'km/h', f:d=>d[0]},
+    '0E': {key:'timing', name:'Ignition timing', unit:'°', f:d=>d[0]/2-64},
+    '0F': {key:'iat', name:'Intake air temp', unit:'°C', f:d=>d[0]-40},
+    '10': {key:'maf', name:'Air flow (MAF)', unit:'g/s', f:d=>(256*d[0]+d[1])/100},
+    '11': {key:'tps', name:'Throttle', unit:'%', f:d=>d[0]*100/255},
+    '14': {key:'o2b1s1', name:'O2 B1 S1', unit:'V', f:d=>d[0]/200},
+    '15': {key:'o2b1s2', name:'O2 B1 S2', unit:'V', f:d=>d[0]/200},
+    '1F': {key:'runtime', name:'Run time', unit:'s', f:d=>256*d[0]+d[1]},
+    '21': {key:'distMil', name:'Distance with light on', unit:'km', f:d=>256*d[0]+d[1]},
+    '2F': {key:'fuel', name:'Fuel level', unit:'%', f:d=>d[0]*100/255},
+    '31': {key:'distClear', name:'Distance since codes cleared', unit:'km', f:d=>256*d[0]+d[1]},
+    '42': {key:'volt', name:'Battery (ECU)', unit:'V', f:d=>(256*d[0]+d[1])/1000},
+  };
+  const FAST = ['0C','05','06','07','08','09','04','10','0B','0D','11'];
+  const SLOW = ['0F','14','15','03','42','1F','2F','0E','21','31'];
+
+  const MSG = /SEARCHING\.\.\.|BUS INIT:?\s*(\.\.\.)?\s*(OK)?/g;
+  const ERR = /NO DATA|UNABLE TO CONNECT|CAN ERROR|BUS ERROR|BUS BUSY|FB ERROR|DATA ERROR|BUFFER FULL|STOPPED|ERR\d+|^\?$/m;
+
+  function isError(raw){ return !raw || ERR.test(String(raw).replace(MSG,'').trim()); }
+
+  // Split ELM output into data frames, joining CAN multi-frame ISO-TP replies.
+  function frames(raw){
+    const lines = String(raw).replace(MSG,'').split(/[\r\n]+/).map(l=>l.replace(/\s+/g,'').toUpperCase()).filter(Boolean);
+    const out=[]; let cur=null;
+    for(const l of lines){
+      if(/^[0-9A-F]{3}$/.test(l)){ cur={len:parseInt(l,16),data:''}; out.push(cur); continue; }
+      const m=l.match(/^([0-9A-F]):([0-9A-F]*)$/);
+      if(m){ if(!cur){cur={len:0,data:''};out.push(cur);} cur.data+=m[2]; continue; }
+      if(/^[0-9A-F]+$/.test(l)){ cur=null; out.push({len:0,data:l}); }
+    }
+    return out.map(f=> f.len ? f.data.slice(0,f.len*2) : f.data);
+  }
+
+  // Find reply bytes for e.g. prefix '41'+'0C'. Returns array of data bytes or null.
+  function parseReply(raw, prefix){
+    if(isError(raw)) return null;
+    for(const f of frames(raw)){ const i=f.indexOf(prefix); if(i===0) return u8(f.slice(prefix.length)); }
+    return null;
+  }
+
+  function supportedFrom(bytes, base){
+    const s=[]; if(!bytes||bytes.length<4) return s;
+    for(let i=0;i<32;i++){ if(bytes[i>>3] & (0x80>>(i&7))) s.push(base+1+i); }
+    return s;
+  }
+  const pidHex = n => n.toString(16).toUpperCase().padStart(2,'0');
+
+  function decodeDtc(h){
+    const c=parseInt(h[0],16);
+    return 'PCBU'[c>>2] + (c&3) + h.slice(1).toUpperCase();
+  }
+
+  function parseDtcs(raw, resp, isCan){
+    if(isError(raw)) return [];
+    const codes=[];
+    for(const f of frames(raw)){
+      if(!f.startsWith(resp)) continue;
+      let p=f.slice(2);
+      if(isCan){ const n=parseInt(p.slice(0,2),16)||0; p=p.slice(2,2+n*4); }
+      for(let i=0;i+4<=p.length;i+=4){ const h=p.substr(i,4); if(h!=='0000') codes.push(decodeDtc(h)); }
+    }
+    return [...new Set(codes)];
+  }
+
+  const SPARK = ['Catalyst','Heated catalyst','Evaporative (EVAP) system','Secondary air','A/C refrigerant','O2 sensors','O2 sensor heaters','EGR / VVT'];
+  const DIESEL = ['NMHC catalyst','NOx / SCR','','Boost pressure','','Exhaust gas sensor','Particulate filter (DPF)','EGR / VVT'];
+  function parseMonitors(d){
+    if(!d||d.length<4) return null;
+    const [A,B,C,D]=d; const diesel=!!(B&0x08);
+    const list=[];
+    [['Misfire',0],['Fuel system',1],['Components',2]].forEach(([n,b])=>{ if(B&(1<<b)) list.push({name:n,complete:!(B&(1<<(b+4)))}); });
+    const names=diesel?DIESEL:SPARK;
+    for(let b=0;b<8;b++){ if(names[b] && (C&(1<<b))) list.push({name:names[b],complete:!(D&(1<<b))}); }
+    return {mil:!!(A&0x80), count:A&0x7F, diesel, list};
+  }
+
+  // ---------- Fault code knowledge ----------
+  // [description, severity, likely causes, link to live check]
+  const DB = {
+    P0010:['Intake camshaft actuator circuit (Bank 1)','warn','VVT solenoid or wiring fault; low or dirty oil.','vvt'],
+    P0011:['Intake cam timing over-advanced (Bank 1)','warn','Low/dirty oil or wrong oil grade, sticking VVT solenoid, stretched timing chain.','vvt'],
+    P0014:['Exhaust cam timing over-advanced (Bank 1)','warn','Low/dirty oil, sticking VVT solenoid, timing chain wear.','vvt'],
+    P0016:['Crank/cam position correlation (Bank 1)','bad','Stretched or jumped timing chain/belt, faulty cam or crank sensor, VVT fault. Check before driving far.','vvt'],
+    P0030:['O2 sensor heater circuit (Bank 1 Sensor 1)','warn','Failed front O2 sensor heater, blown fuse, wiring.','o2'],
+    P0036:['O2 sensor heater circuit (Bank 1 Sensor 2)','low','Failed rear O2 sensor heater, wiring.','o2'],
+    P0045:['Turbo boost control solenoid circuit','warn','Boost solenoid, wiring or vacuum lines.',''],
+    P0068:['MAP/MAF vs throttle position correlation','warn','Intake leak, dirty MAF, faulty throttle body.','maf'],
+    P0087:['Fuel rail pressure too low','bad','Weak fuel pump, blocked fuel filter, regulator or (diesel) SCV/pump fault. Can cause stalling.','trim'],
+    P0088:['Fuel rail pressure too high','warn','Pressure regulator or sensor fault.',''],
+    P0093:['Large fuel leak detected','bad','External fuel leak or rail pressure sensor fault. Inspect for leaks before driving.',''],
+    P0100:['MAF sensor circuit','warn','MAF unplugged, wiring, failed sensor.','maf'],
+    P0101:['MAF sensor range/performance','warn','Dirty MAF element, air leak after the MAF, blocked air filter, failing MAF.','maf'],
+    P0102:['MAF sensor low input','warn','Wiring/connector fault, failed MAF, large intake leak.','maf'],
+    P0103:['MAF sensor high input','warn','Wiring short, failed MAF.','maf'],
+    P0106:['MAP sensor range/performance','warn','Split vacuum hose to MAP sensor, faulty sensor, intake leak.','maf'],
+    P0107:['MAP sensor low input','warn','Wiring/connector, failed MAP sensor.',''],
+    P0108:['MAP sensor high input','warn','Wiring, failed MAP sensor, vacuum hose off.',''],
+    P0110:['Intake air temp sensor circuit','low','IAT sensor or wiring (often part of the MAF).',''],
+    P0113:['Intake air temp sensor high input','low','IAT unplugged or open circuit.',''],
+    P0115:['Coolant temp sensor circuit','warn','ECT sensor or wiring.','temp'],
+    P0116:['Coolant temp sensor range/performance','warn','Thermostat stuck open, failing ECT sensor.','temp'],
+    P0117:['Coolant temp sensor low input','warn','ECT sensor short or wiring.','temp'],
+    P0118:['Coolant temp sensor high input','warn','ECT sensor unplugged/open circuit.','temp'],
+    P0120:['Throttle position sensor circuit','warn','TPS or throttle body fault, wiring.',''],
+    P0121:['Throttle position sensor range/performance','warn','Worn TPS, dirty throttle body.',''],
+    P0122:['Throttle position sensor low input','warn','TPS wiring/sensor.',''],
+    P0123:['Throttle position sensor high input','warn','TPS wiring/sensor.',''],
+    P0125:['Coolant too cold for closed-loop fuel control','warn','Thermostat stuck open, low coolant, ECT sensor.','temp'],
+    P0128:['Coolant below thermostat regulating temperature','warn','Thermostat stuck open (most common), ECT sensor reading low, fan running constantly.','temp'],
+    P0130:['O2 sensor circuit (Bank 1 Sensor 1)','warn','Front O2 sensor or wiring.','o2'],
+    P0131:['O2 sensor low voltage (Bank 1 Sensor 1)','warn','Sensor fault, or a genuine lean condition / exhaust leak near the sensor.','o2'],
+    P0132:['O2 sensor high voltage (Bank 1 Sensor 1)','warn','Sensor fault, wiring short, or running rich.','o2'],
+    P0133:['O2 sensor slow response (Bank 1 Sensor 1)','warn','Ageing/contaminated front O2 sensor, exhaust leak.','o2'],
+    P0134:['O2 sensor no activity (Bank 1 Sensor 1)','warn','Dead sensor, heater failure, wiring.','o2'],
+    P0135:['O2 sensor heater circuit (Bank 1 Sensor 1)','warn','Failed heater in front O2 sensor, fuse, wiring.','o2'],
+    P0136:['O2 sensor circuit (Bank 1 Sensor 2)','low','Rear O2 sensor or wiring.','o2'],
+    P0137:['O2 sensor low voltage (Bank 1 Sensor 2)','low','Rear sensor fault or exhaust leak.','o2'],
+    P0138:['O2 sensor high voltage (Bank 1 Sensor 2)','low','Rear sensor fault or wiring.','o2'],
+    P0139:['O2 sensor slow response (Bank 1 Sensor 2)','low','Ageing rear O2 sensor.','o2'],
+    P0141:['O2 sensor heater circuit (Bank 1 Sensor 2)','low','Failed rear O2 heater, wiring.','o2'],
+    P0151:['O2 sensor low voltage (Bank 2 Sensor 1)','warn','Sensor fault or genuine lean condition on bank 2.','o2'],
+    P0155:['O2 sensor heater circuit (Bank 2 Sensor 1)','warn','Failed heater, wiring.','o2'],
+    P0171:['System too lean (Bank 1)','warn','Vacuum/intake leak after the MAF, dirty or failing MAF, weak fuel pump or blocked filter, leaking PCV hose or intake gasket, exhaust leak before the front O2 sensor.','trim'],
+    P0172:['System too rich (Bank 1)','warn','Leaking injector, high fuel pressure, EVAP purge valve stuck open, MAF over-reading, fuel in the oil.','trim'],
+    P0174:['System too lean (Bank 2)','warn','Same as P0171. Both banks lean together points to a shared cause (MAF, fuel pressure, common vacuum leak).','trim'],
+    P0175:['System too rich (Bank 2)','warn','Same as P0172 for bank 2.','trim'],
+    P0217:['Engine overheat condition','bad','Low coolant, failed fan, water pump, blocked radiator, head gasket. Stop driving until checked.','temp'],
+    P0230:['Fuel pump primary circuit','bad','Fuel pump relay, fuse or wiring.',''],
+    P0234:['Turbo overboost','warn','Wastegate sticking, boost control solenoid, hoses.',''],
+    P0299:['Turbo underboost','warn','Boost leak (split intercooler hose), wastegate/VNT sticking, turbo wear.',''],
+    P0300:['Random/multiple cylinder misfire','bad','Worn plugs or coils, vacuum leak, low fuel pressure, injector problems, low compression. A flashing light means stop – it can damage the catalytic converter.','misfire'],
+    P0325:['Knock sensor circuit (Bank 1)','low','Knock sensor or wiring.',''],
+    P0327:['Knock sensor low input (Bank 1)','low','Knock sensor or wiring.',''],
+    P0335:['Crankshaft position sensor circuit','bad','Crank sensor or wiring; can cause stalling/no start.',''],
+    P0336:['Crankshaft position sensor range/performance','warn','Crank sensor, damaged reluctor ring, wiring.',''],
+    P0340:['Camshaft position sensor circuit (Bank 1)','warn','Cam sensor or wiring.','vvt'],
+    P0341:['Camshaft position sensor range/performance','warn','Cam sensor, timing chain/belt stretch.','vvt'],
+    P0380:['Glow plug circuit','warn','Failed glow plug(s), glow plug relay/module.',''],
+    P0400:['EGR flow malfunction','warn','Carbon-blocked EGR valve or passages.',''],
+    P0401:['EGR flow insufficient','warn','Carbon-blocked EGR valve or passages, vacuum supply.',''],
+    P0402:['EGR flow excessive','warn','EGR valve stuck open.',''],
+    P0403:['EGR circuit','warn','EGR valve/solenoid or wiring.',''],
+    P0420:['Catalyst efficiency below threshold (Bank 1)','warn','Worn catalytic converter, but first rule out exhaust leaks, misfires, a lazy rear/front O2 sensor or running rich/lean.','cat'],
+    P0430:['Catalyst efficiency below threshold (Bank 2)','warn','As P0420 for bank 2.','cat'],
+    P0440:['EVAP system malfunction','low','Loose fuel cap, cracked EVAP hose, purge/vent valve.',''],
+    P0441:['EVAP incorrect purge flow','low','Purge valve, hoses.',''],
+    P0442:['EVAP small leak','low','Fuel cap seal, small hose crack, charcoal canister.',''],
+    P0446:['EVAP vent control circuit','low','Vent valve blocked or wiring.',''],
+    P0455:['EVAP large leak','low','Fuel cap left loose/missing (check first), disconnected EVAP hose.',''],
+    P0456:['EVAP very small leak','low','Fuel cap seal, tiny hose crack.',''],
+    P0457:['EVAP leak – fuel cap loose/off','low','Tighten or replace the fuel cap; light clears after a few drives.',''],
+    P0480:['Cooling fan relay 1 circuit','warn','Fan relay, fuse, wiring. Watch coolant temp.','temp'],
+    P0500:['Vehicle speed sensor','warn','Speed sensor, wiring, ABS sensor (on some cars).',''],
+    P0505:['Idle air control system','warn','Dirty throttle body/IAC valve, vacuum leak.','trim'],
+    P0506:['Idle speed lower than expected','low','Dirty throttle body, IAC valve.',''],
+    P0507:['Idle speed higher than expected','warn','Vacuum leak, dirty/sticking IAC or throttle body.','trim'],
+    P0524:['Engine oil pressure too low','bad','Low oil level, oil pump, sensor. Stop and check oil before driving.',''],
+    P0562:['System voltage low','warn','Weak battery, failing alternator, poor earth.','volt'],
+    P0563:['System voltage high','warn','Faulty alternator regulator.','volt'],
+    P0571:['Brake switch circuit','low','Brake light switch.',''],
+    P0600:['Serial communication link','warn','Module communication fault, wiring.',''],
+    P0601:['ECU memory checksum error','bad','ECU fault – needs reflash or replacement.',''],
+    P0606:['ECU processor fault','bad','ECU internal fault, sometimes caused by low voltage.','volt'],
+    P0670:['Glow plug module circuit','warn','Glow plug controller or wiring.',''],
+    P0700:['Transmission control system (TCM requested light)','warn','The transmission computer has its own code – needs a scan tool that reads the TCM.',''],
+    P0715:['Transmission input speed sensor','warn','Sensor or wiring.',''],
+    P0730:['Incorrect gear ratio','warn','Low/burnt ATF, slipping clutch packs, solenoid.',''],
+    P0740:['Torque converter clutch circuit','warn','TCC solenoid or wiring.',''],
+    P0741:['Torque converter clutch stuck off','warn','TCC solenoid, worn converter, fluid condition.',''],
+    P2002:['DPF efficiency below threshold (Bank 1)','warn','Damaged/removed DPF or differential pressure sensor fault.',''],
+    P2096:['Post-catalyst fuel trim too lean (Bank 1)','warn','Exhaust leak near rear O2, lean condition, rear O2 sensor.','trim'],
+    P2097:['Post-catalyst fuel trim too rich (Bank 1)','warn','Rich running, worn catalyst, rear O2 sensor.','trim'],
+    P2135:['Throttle position sensor A/B correlation','bad','Throttle body sensor fault – may limit power (limp mode).',''],
+    P2187:['System too lean at idle (Bank 1)','warn','Vacuum leak (most likely at idle), PCV, intake gasket.','trim'],
+    P2188:['System too rich at idle (Bank 1)','warn','Leaking injector, purge valve stuck open.','trim'],
+    P2189:['System too lean at idle (Bank 2)','warn','Vacuum leak, intake gasket on bank 2.','trim'],
+    P2195:['O2 sensor signal stuck lean (Bank 1 Sensor 1)','warn','Genuine lean condition or ageing front O2/AF sensor.','o2'],
+    P2196:['O2 sensor signal stuck rich (Bank 1 Sensor 1)','warn','Genuine rich condition or ageing O2/AF sensor.','o2'],
+    P2263:['Turbo boost system performance','warn','Boost leak, VNT sticking, boost sensor.',''],
+    P2463:['DPF soot accumulation','warn','Short trips stop the DPF regenerating; needs a highway drive or forced regen.',''],
+    U0100:['Lost communication with ECM/PCM','bad','CAN wiring, module power/earth.',''],
+    U0101:['Lost communication with TCM','warn','CAN wiring, TCM power.',''],
+    U0121:['Lost communication with ABS module','warn','CAN wiring, ABS module power.',''],
+  };
+  const ORD = ['','first','second','third','fourth','fifth','sixth','seventh','eighth','ninth','tenth','eleventh','twelfth'];
+  function describe(code){
+    if(DB[code]) { const [d,s,c,l]=DB[code]; return {code, desc:d, sev:s, causes:c, link:l}; }
+    let m;
+    if((m=code.match(/^P030([1-9])$|^P031([0-2])$/))){ const n=+(m[1]||('1'+m[2])); return {code,desc:`Cylinder ${n} misfire`,sev:'bad',causes:`Spark plug or coil on cylinder ${n} (swap the coil with another cylinder and see if the code follows), injector, low compression, vacuum leak near that runner. A flashing light means stop driving.`,link:'misfire'}; }
+    if((m=code.match(/^P020([1-9])$|^P021([0-2])$/))){ const n=+(m[1]||('1'+m[2])); return {code,desc:`Injector circuit – cylinder ${n}`,sev:'warn',causes:'Injector coil, connector or wiring.',link:'misfire'}; }
+    if((m=code.match(/^P035([1-9])$|^P036([0-2])$/))){ const n=+(m[1]||('1'+m[2])); return {code,desc:`Ignition coil circuit – cylinder ${n}`,sev:'warn',causes:'Coil, connector or wiring.',link:'misfire'}; }
+    const L=code[0], d2=code[1], d3=code[2];
+    if(L==='P' && (d2==='1'||d2==='3')) return {code,desc:'Manufacturer-specific code',sev:'warn',causes:'Look this code up for your make and model.',link:''};
+    if(L==='P'){
+      const g={'0':'Fuel/air metering & auxiliary emission controls','1':'Fuel/air metering','2':'Fuel/air metering (injector circuit)','3':'Ignition system or misfire','4':'Auxiliary emission controls','5':'Vehicle speed, idle control or auxiliary inputs','6':'Computer output circuit','7':'Transmission','8':'Transmission','9':'Transmission','A':'Hybrid propulsion','B':'Hybrid propulsion','C':'Hybrid propulsion'}[d3]||'Powertrain';
+      return {code,desc:`${g} fault`,sev:'warn',causes:'Not in the built-in list – look up the exact code for your vehicle.',link:''};
+    }
+    return {code,desc:{C:'Chassis',B:'Body',U:'Network/communication'}[L]+' fault',sev:'warn',causes:'Not in the built-in list – look up the exact code for your vehicle.',link:''};
+  }
+
+  // ---------- Diagnosis ----------
+  const avg = a => a.length ? a.reduce((x,y)=>x+y,0)/a.length : NaN;
+  const median = a => { if(!a.length) return NaN; const s=[...a].sort((x,y)=>x-y); const m=s.length>>1; return s.length%2?s[m]:(s[m-1]+s[m])/2; };
+  const f1 = x => (x>0?'+':'')+x.toFixed(1);
+
+  function trimStats(samples, b){
+    const tot = s => (s['stft'+b]!=null && s['ltft'+b]!=null) ? s['stft'+b]+s['ltft'+b] : null;
+    const warm = samples.filter(s=>s.rpm>400 && (s.ect==null || s.ect>=70) && tot(s)!=null && (s.fuelStatus==null || /Closed/.test(s.fuelStatus)));
+    const idle = warm.filter(s=>s.rpm<1100 && (s.speed==null || s.speed<3)).map(tot);
+    const cruise = warm.filter(s=>s.rpm>=1800 && s.rpm<=3500).map(tot);
+    return {all:warm.map(tot), idle, cruise, ltft: avg(warm.map(s=>s['ltft'+b]))};
+  }
+
+  function analyse(st){
+    const F=[]; const add=(level,title,detail)=>F.push({level,title,detail});
+    const S=st.samples||[]; const live=st.live||{}; const codes=st.dtcs;
+    const allCodes = codes ? [...codes.stored.map(c=>({c,k:'Stored'})), ...codes.pending.filter(c=>!codes.stored.includes(c)).map(c=>({c,k:'Pending'})), ...codes.permanent.filter(c=>!codes.stored.includes(c)&&!codes.pending.includes(c)).map(c=>({c,k:'Permanent'}))] : [];
+    const links = new Set(allCodes.map(x=>describe(x.c).link));
+    const mon = st.monitors;
+
+    // 1. Codes
+    if(codes){
+      if(!allCodes.length){
+        if(mon && mon.mil) add('warn','Light is on but the engine computer reports no codes','The light may be requested by another module (e.g. transmission). Use a scanner that reads the transmission/ABS modules, or check the code was not just cleared.');
+        else add('ok','No engine fault codes','Stored, pending and permanent code lists are all empty.');
+      }
+      for(const {c,k} of allCodes){
+        const d=describe(c); const lvl = d.sev==='bad'?'bad':(k==='Pending'||d.sev==='low'?'info':'warn');
+        add(lvl, `${c} – ${d.desc}`, `${k} code. Likely causes: ${d.causes}`);
+      }
+    } else {
+      add('info','Codes not read yet','Press "Read codes & freeze frame" to see why the light is on.');
+    }
+
+    // 2. Freeze frame
+    const ff=st.freeze;
+    if(ff && ff.dtc){
+      const p=[]; if(ff.rpm!=null)p.push(`${Math.round(ff.rpm)} rpm`); if(ff.speed!=null)p.push(`${ff.speed} km/h`); if(ff.ect!=null)p.push(`coolant ${Math.round(ff.ect)} °C`); if(ff.load!=null)p.push(`load ${Math.round(ff.load)}%`);
+      const t1 = (ff.stft1!=null&&ff.ltft1!=null)? ff.stft1+ff.ltft1 : null;
+      if(t1!=null) p.push(`total trim B1 ${f1(t1)}%`);
+      let why='';
+      if(ff.rpm!=null && ff.rpm<1100 && (ff.speed==null||ff.speed<3)) why=' It set at idle'+(t1!=null&&t1>10?' while running lean – this fits an unmetered air (vacuum) leak.':'.');
+      else if(ff.load!=null && ff.load>60) why=' It set under heavy load'+(t1!=null&&t1>10?' while lean – this fits weak fuel delivery (pump/filter) or a MAF under-reading.':'.');
+      if(ff.ect!=null && ff.ect<60) why+=' The engine was still cold.';
+      add('info',`Freeze frame for ${ff.dtc}`,`Recorded at ${p.join(', ')}.${why}`);
+    }
+
+    // 3. Fuel trims
+    const banks=[1,2].filter(b=>S.some(s=>s['ltft'+b]!=null));
+    const res={};
+    for(const b of banks){
+      const t=trimStats(S,b); res[b]=t;
+      if(t.all.length<10){ continue; }
+      const a=avg(t.all), i=avg(t.idle), c=avg(t.cruise);
+      const haveSplit = t.idle.length>=8 && t.cruise.length>=8;
+      if(haveSplit && i>10 && c < i-6){
+        add('warn',`Bank ${b} lean at idle, improves with revs`,`Total trim ${f1(i)}% at idle vs ${f1(c)}% at 1,800–3,500 rpm. A leak matters most at idle when airflow is low, so this pattern points to unmetered air: vacuum hose, PCV hose/valve, intake gasket or brake booster hose. Smoke test the intake, or listen for hissing at idle.`);
+      } else if(haveSplit && c>10 && c>=i-2){
+        add('warn',`Bank ${b} lean, same or worse with revs`,`Total trim ${f1(i)}% at idle, ${f1(c)}% at higher rpm. Lean under load points to fuel delivery (weak pump, blocked filter, regulator) or a MAF that under-reads. A fuel pressure test is the next check.`);
+      } else if(a>10){
+        add('warn',`Bank ${b} running lean (${f1(a)}%)`,`The computer is adding fuel to compensate. Hold 2,500 rpm for 30 s so the idle vs revs pattern can be compared.`);
+      } else if(a<-10){
+        add('warn',`Bank ${b} running rich (${f1(a)}%)`,`The computer is removing fuel. Check for a leaking injector, high fuel pressure, EVAP purge valve stuck open, MAF over-reading, or fuel smell in the oil.`);
+      } else {
+        add('ok',`Bank ${b} fuel trims normal (${f1(a)}%)`,'Total trim within ±10%. If the light is for a lean/rich code, the fault may be intermittent – compare with the freeze frame.');
+      }
+    }
+    if(banks.length===2 && res[1].all.length>=10 && res[2].all.length>=10){
+      const a1=avg(res[1].all), a2=avg(res[2].all);
+      if(a1>10 && a2>10) add('info','Both banks lean together','A shared cause is most likely: MAF sensor, fuel pressure, or a leak in the common intake (e.g. throttle body gasket, PCV, brake booster).');
+      else if((a1>10)!==(a2>10) && Math.abs(a1-a2)>8) add('info',`Only bank ${a1>a2?1:2} is lean`,'A bank-specific cause is likelier: intake manifold gasket on that side, an injector on that bank, or an exhaust leak before that bank\'s front O2 sensor.');
+    }
+    if(links.has('trim') && banks.length && res[banks[0]].all.length<10)
+      add('info','Need more warm-engine data for the lean/rich code','Keep the engine running until coolant is above 70 °C and the fuel system shows Closed loop.');
+
+    // 4. Coolant
+    const ects=S.map(s=>s.ect).filter(x=>x!=null);
+    if(ects.length){
+      const mx=Math.max(...ects), last=ects[ects.length-1];
+      const run = live.runtime!=null ? live.runtime : (S.length? (S[S.length-1].t-S[0].t)/1000 : 0);
+      if(last<=-39 || last>=200) add('bad','Coolant temp sensor reading impossible',`Reads ${last} °C – sensor or wiring fault.`);
+      else if(mx>=110) add('bad',`Engine overheating (${Math.round(mx)} °C seen)`,'Normal is about 85–105 °C. Stop and check coolant level (when cold), fans, radiator and water pump.');
+      else if(run>=600 && mx<75) add('warn',`Engine not reaching operating temp (${Math.round(mx)} °C after ${Math.round(run/60)} min)`,'A thermostat stuck open is the usual cause (matches P0128/P0125). Also check the temp sensor and that the fan is not running all the time.');
+      else if(mx>=80) add('ok',`Coolant temperature normal (${Math.round(last)} °C)`,'');
+    }
+
+    // 5. Voltage
+    const runV=S.filter(s=>s.rpm>500&&s.volt!=null).map(s=>s.volt), offV=S.filter(s=>(s.rpm==null||s.rpm<100)&&s.volt!=null).map(s=>s.volt);
+    if(runV.length>=3){
+      const v=avg(runV);
+      if(v<13.0) add('warn',`Low charging voltage (${v.toFixed(2)} V running)`,'Normal running is 13.5–14.7 V. Check the alternator, belt and battery terminals. Low voltage can trigger random sensor codes.');
+      else if(v>15.0) add('warn',`High charging voltage (${v.toFixed(2)} V)`,'Possible alternator regulator fault.');
+      else add('ok',`Charging voltage normal (${v.toFixed(2)} V)`,'');
+    } else if(offV.length>=3 && avg(offV)<12.2) add('warn',`Battery low (${avg(offV).toFixed(2)} V, engine off)`,'A healthy battery rests at 12.4–12.7 V.');
+
+    // 6. MAF plausibility (speed-density estimate)
+    const disp=+st.dispL;
+    if(disp>0){
+      const r=S.filter(s=>s.rpm>600&&s.maf!=null&&s.map!=null&&s.iat!=null&&(s.ect==null||s.ect>=70)).map(s=>{ const rho=s.map*1000/(287.05*(s.iat+273.15)); const exp=disp*s.rpm/120*rho*0.85; return s.maf/exp; });
+      if(r.length>=10){
+        const m=median(r);
+        if(m<0.72) add('warn',`MAF reading about ${Math.round((1-m)*100)}% lower than expected`,'Compared with an estimate from engine size, rpm and manifold pressure. A low MAF reading points to a dirty/failing MAF or air entering after the MAF. This is an estimate – confirm before buying parts.');
+        else if(m>1.35) add('info',`MAF reading higher than the estimate`,'Could be a MAF over-reading, but turbo engines and engine size entered wrong also cause this. Treat as a hint only.');
+        else add('ok','MAF airflow plausible','Measured airflow is close to the estimate from engine size, rpm and manifold pressure.');
+      }
+    } else if(links.has('maf') || links.has('trim')) add('info','Enter engine size to check the MAF sensor','With engine size (litres), the app compares MAF airflow to what the engine should breathe.');
+
+    // 7. Front O2 activity
+    const o2=S.filter(s=>s.o2b1s1!=null && s.fuelStatus && /Closed/.test(s.fuelStatus) && s.rpm>400).map(s=>s.o2b1s1);
+    if(o2.length>=15){
+      const lo=Math.min(...o2), hi=Math.max(...o2), m=avg(o2);
+      if(hi-lo<0.3) add('warn','Front O2 sensor (B1S1) barely switching',`Range ${lo.toFixed(2)}–${hi.toFixed(2)} V. A healthy narrowband sensor swings about 0.1–0.9 V. Average ${m.toFixed(2)} V (${m<0.35?'stuck lean':m>0.6?'stuck rich':'flat'}). Sensor ageing or contamination is likely.`);
+      else add('ok','Front O2 sensor switching normally',`Range ${lo.toFixed(2)}–${hi.toFixed(2)} V.`);
+    } else if(links.has('o2') && !S.some(s=>s.o2b1s1!=null)) add('info','This car does not report the O2 voltage this app reads','Many newer cars use wideband sensors that need a different PID; rely on the codes and fuel trims.');
+
+    // 8. Open loop when warm
+    const lastS=S[S.length-1];
+    if(lastS && lastS.fuelStatus && /fault/.test(lastS.fuelStatus)) add('warn','Fuel system reports a fault state',`Fuel system: ${lastS.fuelStatus}. The computer has stopped using the O2 sensor feedback.`);
+
+    // 9. Misfire / cat hints
+    if(links.has('cat')) add('info','Before replacing the catalytic converter','Fix any misfire, lean/rich or O2 sensor codes first and check for exhaust leaks ahead of the rear O2 sensor – these often cause P0420/P0430.');
+    if(links.has('misfire')) add('info','Misfire checks','Swap the coil (and plug) from the misfiring cylinder to another cylinder, clear codes and see if the code moves. If it moves, replace that part; if not, check the injector and compression.');
+
+    // 10. Monitors / distances
+    if(mon){
+      const inc=mon.list.filter(m=>!m.complete).map(m=>m.name);
+      if(inc.length) add('info',`Readiness incomplete: ${inc.join(', ')}`,'Normal after codes are cleared or the battery is disconnected. These complete after a mix of city and highway driving.');
+    }
+    if(live.distMil!=null && live.distMil>0) add('info',`Driven ${live.distMil} km with the light on`,'');
+
+    const rank={bad:0,warn:1,info:2,ok:3};
+    return F.sort((a,b)=>rank[a.level]-rank[b.level]);
+  }
+
+  // ---------- Demo car (simulated ELM327, CAN, 3.0 L V6 with a vacuum leak) ----------
+  class DemoTransport{
+    constructor(){ this.onData=null; this.t0=Date.now(); this.sup=[0x01,0x03,0x04,0x05,0x06,0x07,0x08,0x09,0x0B,0x0C,0x0D,0x0E,0x0F,0x10,0x11,0x14,0x15,0x1F,0x20,0x21,0x2F,0x31,0x40,0x42]; this.speedup=1; }
+    async open(){}
+    async close(){}
+    bitmap(base){ let bits=new Array(4).fill(0); for(const p of this.sup){ const i=p-base-1; if(i>=0&&i<32) bits[i>>3]|=(0x80>>(i&7)); } return bits.map(pidHex).join(''); }
+    state(){
+      const t=(Date.now()-this.t0)/1000*this.speedup, ph=t%60;
+      let rpm = ph<25?750:ph<30?750+(ph-25)/5*1750:ph<50?2500:ph<55?2500-(ph-50)/5*1750:750;
+      rpm += (Math.random()-.5)*30;
+      const x=Math.min(1,Math.max(0,(rpm-750)/1750)); // 0 idle .. 1 at 2500
+      const ect=Math.min(90,72+t/4), iat=30;
+      const map = 33 - x*3 + (Math.random()-.5);
+      const rho = map*1000/(287.05*(iat+273.15));
+      const maf = 3.0*rpm/120*rho*0.85*(0.80+0.15*x);
+      const n=()=>(Math.random()-.5)*6;
+      return {rpm,ect,iat,map,maf,load:20+x*8, tps:x*12,
+        stft1:3*(1-x)+n(), ltft1:14-10*x, stft2:2*(1-x)+n(), ltft2:12-9*x,
+        o2:Math.random()<.5?0.15+Math.random()*.15:0.65+Math.random()*.2, o2b:0.62+Math.random()*.06,
+        volt:14.1+(Math.random()-.5)*.1, runtime:Math.round(t+300)};
+    }
+    write(cmd){
+      cmd=cmd.trim().toUpperCase(); const s=this.state(); const h=n=>pidHex(Math.max(0,Math.min(255,Math.round(n)))); const h2=n=>{n=Math.max(0,Math.min(65535,Math.round(n)));return pidHex(n>>8)+pidHex(n&255);};
+      const tr=p=>h(p*128/100+128);
+      const R = {
+        'ATZ':'ELM327 v1.5','ATE0':'OK','ATL0':'OK','ATS0':'OK','ATH0':'OK','ATAT1':'OK','ATSP0':'OK','ATDPN':'A6','ATRV':s.volt.toFixed(1)+'V',
+        '0100':'SEARCHING...\r4100'+this.bitmap(0),'0120':'4120'+this.bitmap(0x20),'0140':'4140'+this.bitmap(0x40),
+        '0101':'410182076505','0103':'4103'+(s.ect>60?'0200':'0100'),'0104':'4104'+h(s.load*255/100),'0105':'4105'+h(s.ect+40),
+        '0106':'4106'+tr(s.stft1),'0107':'4107'+tr(s.ltft1),'0108':'4108'+tr(s.stft2),'0109':'4109'+tr(s.ltft2),
+        '010B':'410B'+h(s.map),'010C':'410C'+h2(s.rpm*4),'010D':'410D00','010E':'410E'+h((12+64)*2),'010F':'410F'+h(s.iat+40),
+        '0110':'4110'+h2(s.maf*100),'0111':'4111'+h(s.tps*255/100),'0114':'4114'+h(s.o2*200)+'FF','0115':'4115'+h(s.o2b*200)+'FF',
+        '011F':'411F'+h2(s.runtime),'0121':'4121'+h2(143),'012F':'412F'+h(62*255/100),'0131':'4131'+h2(812),'0142':'4142'+h2(s.volt*1000),
+        '03':'430201710174','07':'47010507','0A':'4A00','04':'44',
+        '020200':'4202000171','020400':'420400'+h(31*255/100),'020500':'420500'+h(88+40),'020600':'420600'+tr(6),'020700':'420700'+tr(16),
+        '020800':'420800'+tr(5),'020900':'420900'+tr(14),'020C00':'420C00'+h2(780*4),'020D00':'420D0000','020B00':'420B0021','020F00':'420F00'+h(31+40),'021000':'42100001C2'
+      };
+      const out = (R[cmd]!==undefined ? R[cmd] : (cmd.startsWith('AT')?'?':'NO DATA'));
+      setTimeout(()=>this.onData && this.onData(out+'\r\r>'), 15+Math.random()*20);
+    }
+  }
+
+  // ---------- ELM327 driver ----------
+  class ELM{
+    constructor(transport, log){ this.t=transport; this.log=log||(()=>{}); this.buf=''; this.waiter=null; this.queue=Promise.resolve(); this.isCan=true; this.supported=null;
+      transport.onData = s => { this.buf+=s; const i=this.buf.indexOf('>'); if(i>=0){ const r=this.buf.slice(0,i); this.buf=this.buf.slice(i+1); const w=this.waiter; this.waiter=null; if(w) w(r); } }; }
+    cmd(c, timeout=3000){
+      const run=()=>new Promise((res,rej)=>{
+        this.buf=''; const to=setTimeout(()=>{ this.waiter=null; this.log('⟶ '+c+'  (timeout)'); rej(new Error('Adapter did not answer '+c)); }, timeout);
+        this.waiter = r => { clearTimeout(to); let x=r.replace(/\r/g,'\n').trim(); if(x.replace(/\s/g,'').toUpperCase().startsWith(c)) x=x.trimStart().slice(c.length).trim(); this.log('⟶ '+c+'  ⟵ '+x.replace(/\n+/g,' | ')); res(x); };
+        Promise.resolve(this.t.write(c+'\r')).catch(e=>{ clearTimeout(to); this.waiter=null; rej(e); });
+      });
+      const p=this.queue.then(run,run); this.queue=p.catch(()=>{}); return p;
+    }
+    async init(){
+      const id=await this.cmd('ATZ',6000).catch(()=>'' );
+      for(const c of ['ATE0','ATL0','ATS0','ATH0','ATAT1','ATSP0']) await this.cmd(c).catch(()=>{});
+      const r=await this.cmd('0100',20000);
+      if(isError(r)) throw new Error('Adapter connected but the car did not answer ('+r.replace(MSG,'').trim()+'). Is the ignition on?');
+      const dp=(await this.cmd('ATDPN').catch(()=>'')).replace(/[^0-9A-C]/gi,'').toUpperCase().replace(/^A/,'');
+      this.isCan = /^[6-9A-C]$/.test(dp);
+      let sup=supportedFrom(parseReply(r,'4100'),0);
+      if(sup.includes(0x20)){ const s2=supportedFrom(parseReply(await this.cmd('0120'),'4120'),0x20); sup=sup.concat(s2); if(s2.includes(0x40)) sup=sup.concat(supportedFrom(parseReply(await this.cmd('0140'),'4140'),0x40)); }
+      this.supported = sup.length? new Set(sup) : null;
+      return {id:id.split('\n').pop(), protocol:dp, isCan:this.isCan, supported:sup.length};
+    }
+    has(pid){ return !this.supported || this.supported.has(parseInt(pid,16)); }
+    async pid(pid){ if(!this.has(pid)) return null; const r=await this.cmd('01'+pid); const d=parseReply(r,'41'+pid); return d&&d.length? PIDS[pid].f(d) : null; }
+    async adapterVolts(){ const r=await this.cmd('ATRV').catch(()=>''); const m=r.match(/(\d+(\.\d+)?)\s*V/i); return m?+m[1]:null; }
+    async readCodes(){
+      const stored=parseDtcs(await this.cmd('03',8000),'43',this.isCan);
+      const pending=parseDtcs(await this.cmd('07',8000),'47',this.isCan);
+      let permanent=[]; try{ permanent=parseDtcs(await this.cmd('0A',8000),'4A',this.isCan);}catch(e){}
+      return {stored,pending,permanent};
+    }
+    async monitors(){ return parseMonitors(parseReply(await this.cmd('0101'),'4101')); }
+    async freezeFrame(){
+      const d=parseReply(await this.cmd('020200'),'420200');
+      if(!d||d.length<2||(d[0]===0&&d[1]===0)) return null;
+      const ff={dtc:decodeDtc(pidHex(d[0])+pidHex(d[1]))};
+      for(const p of ['04','05','06','07','08','09','0B','0C','0D','0F','10','11']){
+        try{ const x=parseReply(await this.cmd('02'+p+'00'),'42'+p+'00'); if(x&&x.length) ff[PIDS[p].key]=PIDS[p].f(x); }catch(e){}
+      }
+      return ff;
+    }
+    async clear(){ const r=await this.cmd('04',8000); return /44/.test(r.replace(/\s/g,'')); }
+  }
+
+  return {PIDS,FAST,SLOW,frames,parseReply,parseDtcs,decodeDtc,supportedFrom,parseMonitors,describe,analyse,isError,DemoTransport,ELM,pidHex};
+})();
+if(typeof module!=='undefined') module.exports=OBD;
+</script>
+
+<!-- ================= TRANSPORTS + UI ================= -->
+<script>
+const BLE_SERVICES=['0000fff0-0000-1000-8000-00805f9b34fb','0000ffe0-0000-1000-8000-00805f9b34fb','000018f0-0000-1000-8000-00805f9b34fb','e7810a71-73ae-499d-8c15-faa9aef0c3f2','0000ae30-0000-1000-8000-00805f9b34fb'];
+
+class SerialTransport{
+  constructor(baud){ this.baud=baud; this.onData=null; this.onClose=null; }
+  async open(){
+    if(!('serial' in navigator)) throw new Error('This browser cannot open serial ports. Use Chrome or Edge on a PC/Mac and open the downloaded file (not the in-app preview).');
+    this.port=await navigator.serial.requestPort();
+    await this.port.open({baudRate:this.baud});
+    this.writer=this.port.writable.getWriter(); this.reader=this.port.readable.getReader();
+    (async()=>{ const dec=new TextDecoder(); try{ for(;;){ const {value,done}=await this.reader.read(); if(done) break; this.onData&&this.onData(dec.decode(value)); } }catch(e){} this.onClose&&this.onClose(); })();
+  }
+  write(s){ return this.writer.write(new TextEncoder().encode(s)); }
+  async close(){ try{await this.reader.cancel();}catch(e){} try{this.reader.releaseLock();}catch(e){} try{this.writer.releaseLock();}catch(e){} try{await this.port.close();}catch(e){} }
+}
+
+class BleTransport{
+  constructor(){ this.onData=null; this.onClose=null; }
+  async open(){
+    if(!('bluetooth' in navigator)) throw new Error('This browser has no Web Bluetooth. Use Chrome on Android or a PC (not iPhone/Safari), and open the downloaded file.');
+    this.device=await navigator.bluetooth.requestDevice({acceptAllDevices:true, optionalServices:BLE_SERVICES});
+    this.device.addEventListener('gattserverdisconnected',()=>this.onClose&&this.onClose());
+    const server=await this.device.gatt.connect();
+    for(const uuid of BLE_SERVICES){
+      let svc; try{ svc=await server.getPrimaryService(uuid); }catch(e){ continue; }
+      let n=null,w=null;
+      for(const c of await svc.getCharacteristics()){
+        if(!n && (c.properties.notify||c.properties.indicate)) n=c;
+        if(!w && (c.properties.write||c.properties.writeWithoutResponse)) w=c;
+      }
+      if(n&&w){ this.n=n; this.w=w; break; }
+    }
+    if(!this.n) throw new Error('Connected, but this adapter does not look like a BLE ELM327. If it is Bluetooth Classic, pair it on a Windows PC and use the COM port option.');
+    const dec=new TextDecoder();
+    this.n.addEventListener('characteristicvaluechanged',e=>this.onData&&this.onData(dec.decode(e.target.value)));
+    await this.n.startNotifications();
+  }
+  async write(s){
+    const b=new TextEncoder().encode(s);
+    for(let i=0;i<b.length;i+=20){ const chunk=b.slice(i,i+20); if(this.w.properties.writeWithoutResponse) await this.w.writeValueWithoutResponse(chunk); else await this.w.writeValue(chunk); }
+  }
+  async close(){ try{ this.device.gatt.disconnect(); }catch(e){} }
+}
+
+// ---------- state ----------
+const $=id=>document.getElementById(id);
+const S={elm:null,transport:null,running:false,live:{},samples:[],dtcs:null,freeze:null,monitors:null,dispL:''};
+try{ const d=localStorage.getItem('obd.disp'); if(d) $('disp').value=d; }catch(e){}
+$('disp').addEventListener('change',()=>{ try{localStorage.setItem('obd.disp',$('disp').value);}catch(e){} refreshDiagnosis(); });
+
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+function log(m){ const el=$('log'); el.textContent+=m+'\n'; if(el.textContent.length>20000) el.textContent=el.textContent.slice(-15000); el.scrollTop=el.scrollHeight; }
+function setConn(on,text){ $('connPill').textContent=text; $('connPill').classList.toggle('on',on); $('btnConnect').disabled=on; $('btnDisconnect').disabled=!on; $('btnRead').disabled=!on; $('btnClear').disabled=!on; }
+
+// ---------- gauges ----------
+const GAUGES=[
+  ['rpm','RPM','rpm',0, v=>v>6000?'bad':v>0?'ok':''],
+  ['ect','Coolant','°C',0, v=>v>=110?'bad':v>=104||v<70?'warn':'ok'],
+  ['trim1','Total trim B1','%',1, v=>Math.abs(v)>20?'bad':Math.abs(v)>10?'warn':'ok'],
+  ['trim2','Total trim B2','%',1, v=>Math.abs(v)>20?'bad':Math.abs(v)>10?'warn':'ok'],
+  ['stft1','Short trim B1','%',1, null],['ltft1','Long trim B1','%',1, v=>Math.abs(v)>15?'warn':'ok'],
+  ['stft2','Short trim B2','%',1, null],['ltft2','Long trim B2','%',1, v=>Math.abs(v)>15?'warn':'ok'],
+  ['load','Engine load','%',0,null],['maf','Air flow (MAF)','g/s',1,null],['map','Manifold pressure','kPa',0,null],
+  ['iat','Intake air','°C',0,null],['tps','Throttle','%',0,null],['speed','Speed','km/h',0,null],['timing','Timing','°',1,null],
+  ['o2b1s1','O2 B1 S1','V',2,null],['o2b1s2','O2 B1 S2','V',2,null],
+  ['volt','Battery','V',2, v=>v<12.0||v>15.0?'warn':'ok'],['fuel','Fuel level','%',0,null],['fuelStatus','Fuel system','',null, v=>/fault/.test(v)?'bad':/Open/.test(v)?'warn':'ok'],
+];
+function renderGauges(){
+  const L=S.live; let h='';
+  for(const [k,n,u,dp,cls] of GAUGES){
+    const v=L[k]; if(v==null) continue;
+    const txt = typeof v==='number' ? (dp==null?v:(/trim|tft/.test(k)&&v>0?'+':'')+v.toFixed(dp)) : v;
+    h+=`<div class="g ${cls?cls(v):''}"><div class="n">${n}</div><div class="v" style="${typeof v==='string'?'font-size:16px':''}">${esc(txt)}<span class="u">${u}</span></div></div>`;
+  }
+  $('gauges').innerHTML = h || '<div class="muted">Waiting for data…</div>';
+}
+
+// ---------- charts ----------
+function drawChart(cv, series, opt){
+  const dpr=window.devicePixelRatio||1, W=cv.clientWidth, H=cv.clientHeight;
+  cv.width=W*dpr; cv.height=H*dpr; const g=cv.getContext('2d'); g.scale(dpr,dpr); g.clearRect(0,0,W,H);
+  const P={l:40,r:10,t:10,b:18}, w=W-P.l-P.r, h=H-P.t-P.b;
+  const n=Math.max(2,...series.map(s=>s.data.length));
+  const css=getComputedStyle(document.documentElement);
+  const axisY=(lo,hi,side)=>({lo,hi,y:v=>P.t+h-(v-lo)/(hi-lo)*h});
+  const ax={};
+  for(const s of series){ const a=s.axis||'L'; const vals=s.data.filter(v=>v!=null); if(!ax[a]) ax[a]={lo:Infinity,hi:-Infinity}; if(vals.length){ ax[a].lo=Math.min(ax[a].lo,...vals); ax[a].hi=Math.max(ax[a].hi,...vals);} }
+  for(const a in ax){ const o=(opt.range&&opt.range[a])||[]; let lo=o[0]!=null?Math.min(o[0],ax[a].lo):ax[a].lo, hi=o[1]!=null?Math.max(o[1],ax[a].hi):ax[a].hi; if(!isFinite(lo)){lo=0;hi=1;} if(hi-lo<1e-6){hi=lo+1;} ax[a]=axisY(lo,hi); }
+  g.font='11px system-ui'; g.fillStyle=css.getPropertyValue('--muted'); g.strokeStyle='#262c35'; g.lineWidth=1;
+  const L=ax.L; if(L){ for(let i=0;i<=4;i++){ const v=L.lo+(L.hi-L.lo)*i/4, y=L.y(v); g.beginPath(); g.moveTo(P.l,y); g.lineTo(W-P.r,y); g.stroke(); g.fillText(v.toFixed(Math.abs(L.hi-L.lo)<20?1:0),4,y+4);} }
+  if(opt.band && L){ g.fillStyle='rgba(63,178,127,.08)'; const y1=L.y(opt.band[1]), y2=L.y(opt.band[0]); g.fillRect(P.l,y1,w,y2-y1); }
+  if(L && L.lo<0 && L.hi>0){ g.strokeStyle='#3a424e'; g.beginPath(); g.moveTo(P.l,L.y(0)); g.lineTo(W-P.r,L.y(0)); g.stroke(); }
+  for(const s of series){ const A=ax[s.axis||'L']; g.strokeStyle=s.color; g.lineWidth=2; g.beginPath(); let st=false;
+    s.data.forEach((v,i)=>{ if(v==null){st=false;return;} const x=P.l+i/(n-1)*w, y=A.y(v); if(!st){g.moveTo(x,y);st=true;} else g.lineTo(x,y); }); g.stroke(); }
+}
+function legend(el,series){ el.innerHTML=series.map(s=>`<span><i style="background:${s.color}"></i>${s.name}</span>`).join(''); }
+function renderCharts(){
+  const win=S.samples.slice(-150);
+  const tot=b=>win.map(s=>s['stft'+b]!=null&&s['ltft'+b]!=null?s['stft'+b]+s['ltft'+b]:null);
+  const tr=[{name:'Total B1',color:'#5b9bd5',data:tot(1)}];
+  if(win.some(s=>s.ltft2!=null)) tr.push({name:'Total B2',color:'#e5a83b',data:tot(2)});
+  tr.push({name:'Long term B1',color:'#8fb9e3',data:win.map(s=>s.ltft1??null)});
+  drawChart($('chTrim'),tr,{range:{L:[-15,15]},band:[-10,10]}); legend($('lgTrim'),tr.concat([{name:'±10% normal band',color:'rgba(63,178,127,.5)'}]));
+  const rp=[{name:'RPM',color:'#5b9bd5',data:win.map(s=>s.rpm??null)},{name:'Coolant °C (right scale)',color:'#e5534b',axis:'R',data:win.map(s=>s.ect??null)}];
+  drawChart($('chRpm'),rp,{range:{L:[0,3000],R:[0,110]}}); legend($('lgRpm'),rp);
+}
+
+// ---------- codes / freeze / monitors ----------
+function renderCodes(){
+  const d=S.dtcs; if(!d){ return; }
+  const block=(title,list)=> list.length ? `<div style="margin-bottom:8px"><div class="muted" style="margin-bottom:4px">${title}</div>`+list.map(c=>{ const x=OBD.describe(c); const lv=x.sev==='bad'?'bad':x.sev==='low'?'info':'warn';
+    return `<div class="finding ${lv}"><div class="t">${esc(c)} <span class="tag ${lv}">${x.sev==='bad'?'Urgent':x.sev==='low'?'Minor':'Fix soon'}</span></div><div class="d">${esc(x.desc)}<br><span class="muted">Likely causes:</span> ${esc(x.causes)}</div></div>`; }).join('')+'</div>' : '';
+  const h=block('Stored (turned the light on)',d.stored)+block('Pending (seen once – not yet confirmed)',d.pending)+block('Permanent (clear only after the car re-tests itself)',d.permanent);
+  $('codes').innerHTML = h || '<div class="finding ok"><div class="t">No codes</div></div>';
+}
+function renderFreeze(){
+  const f=S.freeze; if(S.dtcs && !f){ $('freeze').innerHTML='<div class="muted">No freeze frame stored.</div>'; return; } if(!f) return;
+  const rows=[['Code',f.dtc]]; const P=OBD.PIDS;
+  for(const k of ['rpm','speed','ect','load','stft1','ltft1','stft2','ltft2','map','maf','iat','tps']){ if(f[k]==null) continue; const p=Object.values(P).find(x=>x.key===k); rows.push([p.name, (typeof f[k]==='number'?f[k].toFixed(k==='maf'?2:/tft/.test(k)?1:0):f[k])+' '+p.unit]); }
+  $('freeze').innerHTML='<table>'+rows.map(r=>`<tr><td>${esc(r[0])}</td><td class="num">${esc(r[1])}</td></tr>`).join('')+'</table>';
+}
+function renderMonitors(){
+  const m=S.monitors; if(!m) return;
+  $('monitors').innerHTML='<table><tr><th>Monitor</th><th style="text-align:right">Status</th></tr>'+m.list.map(x=>`<tr><td>${esc(x.name)}</td><td class="num"><span class="tag ${x.complete?'ok':'warn'}">${x.complete?'Complete':'Not complete'}</span></td></tr>`).join('')+'</table>';
+}
+function renderMil(){
+  const m=S.monitors; if(!m) return;
+  $('lamp').classList.toggle('on',m.mil);
+  $('milText').textContent = m.mil ? 'Light is ON' : 'Light is off';
+  const n=S.dtcs?S.dtcs.stored.length:m.count;
+  let sub=`${n} stored code${n===1?'':'s'}`; if(S.dtcs&&S.dtcs.pending.length) sub+=`, ${S.dtcs.pending.length} pending`;
+  if(S.live.distMil) sub+=` · ${S.live.distMil} km with light on`;
+  $('milSub').textContent=sub;
+}
+function refreshDiagnosis(){
+  S.dispL=$('disp').value;
+  const F=OBD.analyse(S);
+  $('findings').innerHTML = F.map(f=>`<div class="finding ${f.level}"><div class="t"><span class="tag ${f.level}">${{bad:'Problem',warn:'Check',info:'Note',ok:'OK'}[f.level]}</span>${esc(f.title)}</div>${f.detail?`<div class="d">${esc(f.detail)}</div>`:''}</div>`).join('') || '<div class="muted">No data yet.</div>';
+}
+
+// ---------- actions ----------
+async function readCodes(){
+  const e=S.elm; if(!e) return; $('btnRead').disabled=true; $('btnRead').textContent='Reading…';
+  try{
+    S.monitors=await e.monitors(); S.dtcs=await e.readCodes(); S.freeze=await e.freezeFrame();
+    for(const p of ['21','31']){ const v=await e.pid(p); if(v!=null) S.live[OBD.PIDS[p].key]=v; }
+  }catch(err){ log('Read error: '+err.message); }
+  $('btnRead').disabled=false; $('btnRead').textContent='Read codes & freeze frame';
+  renderMil(); renderCodes(); renderFreeze(); renderMonitors(); refreshDiagnosis();
+}
+async function pollLoop(){
+  let cycle=0;
+  while(S.running){
+    const e=S.elm, s={t:Date.now()};
+    try{
+      const list = OBD.FAST.concat(cycle%5===0?OBD.SLOW:[]);
+      for(const p of list){ if(!S.running) break; const v=await e.pid(p); if(v!=null){ S.live[OBD.PIDS[p].key]=v; } }
+      if(cycle%5===0 && !e.has('42')){ const v=await e.adapterVolts(); if(v!=null) S.live.volt=v; }
+      for(const k of ['rpm','ect','stft1','ltft1','stft2','ltft2','load','maf','map','speed','tps','iat','o2b1s1','o2b1s2','volt','fuelStatus','timing','runtime']) if(S.live[k]!=null) s[k]=S.live[k];
+      if(S.live.stft1!=null&&S.live.ltft1!=null) S.live.trim1=S.live.stft1+S.live.ltft1;
+      if(S.live.stft2!=null&&S.live.ltft2!=null) S.live.trim2=S.live.stft2+S.live.ltft2;
+      S.samples.push(s); if(S.samples.length>20000) S.samples.shift();
+      $('logCount').textContent=S.samples.length+' samples'; $('btnCsv').disabled=false;
+      renderGauges(); renderCharts(); if(cycle%3===0) refreshDiagnosis(); if(cycle%5===0) renderMil();
+    }catch(err){ log('Poll error: '+err.message); await new Promise(r=>setTimeout(r,800)); }
+    cycle++;
+    await new Promise(r=>setTimeout(r,250));
+  }
+}
+async function connect(){
+  const m=$('method').value; let t;
+  if(m==='serial') t=new SerialTransport(+$('baud').value); else if(m==='ble') t=new BleTransport(); else t=new OBD.DemoTransport();
+  $('connInfo').textContent='Connecting… (the first connection can take 10–20 seconds while the adapter finds the car\'s protocol)';
+  try{
+    await t.open(); t.onClose=()=>{ if(S.running){ log('Adapter disconnected'); disconnect(); } };
+    const e=new OBD.ELM(t,log); const info=await e.init();
+    S.elm=e; S.transport=t; S.running=true;
+    if(m==='demo' && !$('disp').value) $('disp').value='3.0';
+    setConn(true, m==='demo'?'Demo car':'Connected');
+    $('connInfo').textContent=`${info.id||'ELM327'} · protocol ${info.protocol||'?'}${info.isCan?' (CAN)':''} · ${info.supported||'?'} live values supported`;
+    await readCodes();
+    pollLoop();
+  }catch(err){
+    log('Connect failed: '+err.message); $('connInfo').textContent=err.message; try{await t.close();}catch(e){} setConn(false,'Not connected');
+  }
+}
+async function disconnect(){ S.running=false; const t=S.transport; S.transport=null; S.elm=null; try{ await t&&t.close(); }catch(e){} setConn(false,'Not connected'); $('connInfo').textContent='Disconnected. Your session data is kept until you reset it.'; }
+
+$('btnConnect').onclick=connect;
+$('btnDisconnect').onclick=disconnect;
+$('btnRead').onclick=readCodes;
+$('btnClear').onclick=()=>$('clearConfirm').classList.add('show');
+$('btnClearNo').onclick=()=>$('clearConfirm').classList.remove('show');
+$('btnClearYes').onclick=async()=>{
+  $('clearConfirm').classList.remove('show'); if(!S.elm) return;
+  try{ const ok=await S.elm.clear(); log(ok?'Codes cleared':'Clear not confirmed by car'); }catch(e){ log('Clear failed: '+e.message); }
+  await readCodes();
+};
+$('btnReset').onclick=()=>{ S.samples=[]; $('logCount').textContent='0 samples'; $('btnCsv').disabled=true; renderCharts(); refreshDiagnosis(); };
+$('btnCsv').onclick=()=>{
+  const cols=['time','rpm','ect','stft1','ltft1','stft2','ltft2','load','maf','map','iat','tps','speed','timing','o2b1s1','o2b1s2','volt','fuelStatus'];
+  const lines=[cols.join(',')].concat(S.samples.map(s=>[new Date(s.t).toISOString()].concat(cols.slice(1).map(c=>s[c]==null?'':typeof s[c]==='number'?+s[c].toFixed(3):'"'+s[c]+'"')).join(',')));
+  const meta = S.dtcs ? '\n\nStored codes,'+S.dtcs.stored.join(' ')+'\nPending codes,'+S.dtcs.pending.join(' ') : '';
+  const blob=new Blob([lines.join('\n')+meta],{type:'text/csv'}); const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob); a.download='obd-log-'+new Date().toISOString().slice(0,16).replace(/[:T]/g,'-')+'.csv'; document.body.appendChild(a); a.click(); a.remove();
+};
+$('method').onchange=()=>{ $('baud').style.display=$('method').value==='serial'?'':'none'; };
+window.addEventListener('resize',renderCharts);
+renderGauges(); renderCharts(); refreshDiagnosis();
+</script>
+</body>
+</html>
